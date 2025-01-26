@@ -1,47 +1,34 @@
-#!/usr/bin/env python
+from kafka import KafkaProducer
+from kafka.errors import KafkaError
+import ssl
 
-from random import choice
-from confluent_kafka import Producer
+# Configuration parameters
+keystore_location = "path/to/client.keystore"
+keystore_password = "your_keystore_password"
+truststore_location = "path/to/truststore.jks"
+truststore_password = "your_truststore_password"
 
-if __name__ == '__main__':
+# Configure SSL context
+ssl_context = ssl.create_default_context(purpose=ssl.Purpose.CLIENT_AUTH)
+ssl_context.load_cert_chain(keystore_location, keystore_password)
+ssl_context.load_verify_locations(truststore_location)
 
-    config = {
-        # User-specific properties that you must set
-        'bootstrap.servers': "localhost:9093"
-        # 'sasl.username':     '<CLUSTER API KEY>',
-        # 'sasl.password':     '<CLUSTER API SECRET>',
+# Producer configuration
+producer_config = {
+    'bootstrap_servers': 'localhost:9092',
+    'security_protocol': 'SSL',
+    'ssl_context': ssl_context
+}
 
-        # # Fixed properties
-        # 'security.protocol': 'SASL_SSL',
-        # 'sasl.mechanisms':   'PLAIN',
-        # 'acks':              'all'
-    }
+# Create producer
+producer = KafkaProducer(**producer_config)
 
-    # Create Producer instance
-    producer = Producer(config)
-
-    # Optional per-message delivery callback (triggered by poll() or flush())
-    # when a message has been successfully delivered or permanently
-    # failed delivery (after retries).
-    def delivery_callback(err, msg):
-        if err:
-            print('ERROR: Message failed delivery: {}'.format(err))
-        else:
-            print("Produced event to topic {topic}: key = {key:12} value = {value:12}".format(
-                topic=msg.topic(), key=msg.key().decode('utf-8'), value=msg.value().decode('utf-8')))
-
-    # Produce data by selecting random values from these lists.
-    topic = "purchases"
-    user_ids = ['eabara', 'jsmith', 'sgarcia', 'jbernard', 'htanaka', 'awalther']
-    products = ['book', 'alarm clock', 't-shirts', 'gift card', 'batteries']
-
-    count = 0
-    for _ in range(10):
-        user_id = choice(user_ids)
-        product = choice(products)
-        producer.produce(topic, product, user_id, callback=delivery_callback)
-        count += 1
-
-    # Block until the messages are sent.
-    producer.poll(10000)
+# Send message
+try:
+    producer.send('my-topic', b'Hello, world!')
     producer.flush()
+except KafkaError as e:
+    print(f"Failed to send message: {e}")
+
+# Close producer
+producer.close()
